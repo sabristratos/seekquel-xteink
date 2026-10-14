@@ -1,0 +1,10 @@
+{
+  "name": "seekquel-crosspoint-plugin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/plugin.test.mjs",
+    "check": "node --check seekquel/plugin.js && node --test tests/plugin.test.mjs",
+    "build": "python scripts/build.py"
+  }
+}
