@@ -79,6 +79,9 @@ CrossPoint.registerPlugin((container, api) => {
     checkOk: "Seekquel answered. Your reading time will arrive in your library.",
     keyRevoked:
       "Seekquel no longer accepts this reader's key. It may have been removed in the app. Disconnect, then connect again.",
+    elsewhere:
+      "Your place in a book syncs with {server}, not Seekquel. Your reading time still goes to Seekquel, and a book it has not seen before waits in the app, under Books from your reader, until you say which book it is. Matching books by their contents applies to {server} too, so your other devices that sync with it need the same setting to find your place.",
+    syncHere: "Sync my place with Seekquel instead",
     fixHeading: "Some sync settings on this reader need changing",
     fix: "Fix sync settings",
     fixed: "Sync settings updated.",
@@ -91,6 +94,8 @@ CrossPoint.registerPlugin((container, api) => {
       "This reader could not save to its memory card. Check the card is in and has space, then try again.",
     loadFailed: "This page could not read the plugin's files. Reinstall the plugin and reload the page.",
   };
+
+  const PROBLEMS_WHEN_ELSEWHERE = ["match"];
 
   const PROBLEMS = {
     url: "The sync server is not Seekquel's.",
@@ -241,6 +246,12 @@ CrossPoint.registerPlugin((container, api) => {
     };
   }
 
+  function otherSyncServer() {
+    if (!has(SETTING.url)) return null;
+    const address = normalizedAddress(settings[SETTING.url]);
+    return address !== "" && address !== normalizedAddress(config.server) ? address : null;
+  }
+
   function settingProblems() {
     const problems = [];
     if (has(SETTING.url) && normalizedAddress(settings[SETTING.url]) !== normalizedAddress(config.server)) problems.push("url");
@@ -249,13 +260,14 @@ CrossPoint.registerPlugin((container, api) => {
     if (has(SETTING.metadata) && Number(settings[SETTING.metadata]) !== ON) problems.push("metadata");
     if (has(SETTING.serverType) && Number(settings[SETTING.serverType]) !== SERVER_TYPE_OTHER) problems.push("serverType");
     if (has(SETTING.clippings) && Number(settings[SETTING.clippings]) !== OFF) problems.push("clippings");
-    return problems;
+    return otherSyncServer() ? problems.filter((problem) => PROBLEMS_WHEN_ELSEWHERE.includes(problem)) : problems;
   }
 
-  async function applySettings(key) {
+  async function applySettings(key, only) {
+    const wanted = wantedSettings(key);
     const update = {};
-    for (const [name, value] of Object.entries(wantedSettings(key))) {
-      if (has(name)) update[name] = value;
+    for (const name of only || Object.keys(SETTING)) {
+      if (has(SETTING[name])) update[SETTING[name]] = wanted[SETTING[name]];
     }
     if (Object.keys(update).length === 0) return false;
     const response = await fetch("/api/settings", {
@@ -266,6 +278,14 @@ CrossPoint.registerPlugin((container, api) => {
     if (!response.ok) return false;
     await loadSettings();
     return settingProblems().length === 0;
+  }
+
+  async function settingsNotice(only) {
+    try {
+      return (await applySettings(config.key, only)) ? TEXT.fixed : TEXT.fixFailed;
+    } catch (_error) {
+      return TEXT.fixFailed;
+    }
   }
 
   async function relayJson(method, url, body, headers) {
@@ -300,7 +320,12 @@ CrossPoint.registerPlugin((container, api) => {
       showDisconnected(TEXT.saveFailed);
       return;
     }
-    await applySettings(key);
+    try {
+      if (!otherSyncServer()) await applySettings(key);
+    } catch (_error) {
+      showConnected(`${TEXT.fixFailed} ${TEXT.leaveTransfer}`);
+      return;
+    }
     showConnected(TEXT.leaveTransfer);
   }
 
@@ -472,6 +497,14 @@ CrossPoint.registerPlugin((container, api) => {
     const nodes = [element("h3", TEXT.connected)];
     nodes.push(element("p", config.send_on_sleep === false ? TEXT.sendsOnWifi : TEXT.sendsOnSleep));
 
+    const elsewhere = otherSyncServer();
+    if (elsewhere) {
+      nodes.push(
+        element("p", TEXT.elsewhere.replaceAll("{server}", elsewhere)),
+        actions(button(TEXT.syncHere, async () => showConnected(await settingsNotice(null)))),
+      );
+    }
+
     const problems = settingProblems();
     if (problems.length > 0) {
       const list = element("ul");
@@ -480,14 +513,7 @@ CrossPoint.registerPlugin((container, api) => {
         element("h3", TEXT.fixHeading),
         list,
         actions(
-          button(
-            TEXT.fix,
-            async () => {
-              const fixed = await applySettings(config.key);
-              showConnected(fixed ? TEXT.fixed : TEXT.fixFailed);
-            },
-            PRIMARY,
-          ),
+          button(TEXT.fix, async () => showConnected(await settingsNotice(elsewhere ? problems : null)), PRIMARY),
         ),
       );
     }

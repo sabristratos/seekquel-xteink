@@ -1,6 +1,6 @@
 {
   "title": "Seekquel",
   "description": "Logs your reading time in Seekquel.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "mount": "settings"
 }

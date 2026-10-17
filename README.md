@@ -24,7 +24,7 @@ Your place in a book already syncs through CrossPoint's KOReader Sync. This plug
 
 If the reader already syncs its place with Seekquel, the card offers to use that account instead of a new code.
 
-Connecting also sets the reader's KOReader Sync settings for Seekquel: the server, matching books by their contents rather than their file name, sending each book's title, and server type Other so the exact spot in a book is kept. The card lists any of these that later change, with a button to put them back.
+Connecting also sets the reader's KOReader Sync settings for Seekquel: the server, matching books by their contents rather than their file name, sending each book's title, and server type Other so the exact spot in a book is kept. The card lists any of these that later change, with a button to put them back. If you point KOReader Sync at another server on purpose, such as CrossPoint Sync, the card leaves it there, including when you first connect: your reading time still goes to Seekquel, and the card only sets matching books by their contents. That setting applies to the other server too, so your other devices that sync with it need it as well to find your place.
 
 ## What it sends
 

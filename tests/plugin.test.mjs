@@ -154,6 +154,75 @@ test("a connected reader whose settings drifted is told what is wrong and can fi
   assert.doesNotMatch(page.text(), /matched by file name/);
 });
 
+test("a reader that syncs its place with another server keeps it, and only the settings Seekquel still needs are offered", async () => {
+  const other = "https://sync.crosspointreader.com";
+  const page = await mount({
+    config: { server: SERVER, key: KEY, send_on_sleep: true },
+    settings: defaultSettings({ koServerUrl: other, koUsername: "schwingi", koPassword: "secret", koServerType: 1, koMatchMethod: 0, koSendMetadata: 0, koSyncClippings: 1 }),
+    relay: async () => ({ status: 200, body: "{}" }),
+  });
+
+  assert.match(page.text(), /syncs with sync\.crosspointreader\.com, not Seekquel/);
+  assert.match(page.text(), /matched by file name/);
+  assert.doesNotMatch(page.text(), /not Seekquel's|not this reader's Seekquel key|titles are not sent|server type|Clippings sync/);
+
+  await page.click("Fix sync settings");
+
+  assert.deepEqual(page.deviceSettings, defaultSettings({
+    koServerUrl: other,
+    koUsername: "schwingi",
+    koPassword: "secret",
+    koServerType: 1,
+    koMatchMethod: 1,
+    koSendMetadata: 0,
+    koSyncClippings: 1,
+  }));
+  assert.match(page.text(), /Sync settings updated/);
+  assert.match(page.text(), /syncs with sync\.crosspointreader\.com/);
+
+  await page.click("Sync my place with Seekquel instead");
+
+  assert.equal(page.deviceSettings.koServerUrl, SERVER);
+  assert.equal(page.deviceSettings.koUsername, KEY);
+  assert.equal(page.deviceSettings.koSyncClippings, 0);
+  assert.doesNotMatch(page.text(), /not Seekquel\./);
+});
+
+test("connecting a reader that syncs its place with another server keeps every setting until the reader chooses", async () => {
+  const other = "https://sync.crosspointreader.com";
+  const page = await mount({
+    settings: defaultSettings({ koServerUrl: other, koUsername: "schwingi", koPassword: "secret" }),
+    relay: pairingRelay({ pollAnswers: [APPROVED] }),
+  });
+
+  await page.click("Connect to Seekquel");
+  await page.runTimers();
+
+  assert.equal(page.fileJson("config.json").key, KEY);
+  assert.deepEqual(page.deviceSettings, defaultSettings({
+    koServerUrl: other,
+    koUsername: "schwingi",
+    koPassword: "secret",
+  }));
+  assert.match(page.text(), /syncs with sync\.crosspointreader\.com, not Seekquel/);
+  page.button("Fix sync settings");
+  assert.match(page.text(), /applies to sync\.crosspointreader\.com too/);
+  page.button("Sync my place with Seekquel instead");
+});
+
+test("a sync settings change the reader does not take says so rather than nothing", async () => {
+  const page = await mount({
+    config: { server: SERVER, key: KEY, send_on_sleep: true },
+    settings: defaultSettings({ koServerUrl: SERVER, koUsername: KEY, koServerType: 2, koMatchMethod: 0, koSendMetadata: 1 }),
+    relay: async () => ({ status: 200, body: "{}" }),
+  });
+  Object.freeze(page.deviceSettings);
+
+  await page.click("Fix sync settings");
+
+  assert.match(page.text(), /did not take the new settings/);
+});
+
 test("turning off sending at sleep rewrites the manifest so the reader stops waking its Wi-Fi", async () => {
   const page = await mount({
     config: { server: SERVER, key: KEY, send_on_sleep: true },
