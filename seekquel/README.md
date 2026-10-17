@@ -10,7 +10,7 @@ Setting it up
 4. Choose Connect to Seekquel, then enter the code it shows in Seekquel.
 5. Leave File Transfer on the reader. Sending starts then.
 
-The card also sets this reader's sync settings for Seekquel: the sync server, matching books by their contents rather than their file name, and sending each book's title.
+The card also sets this reader's sync settings for Seekquel: the sync server, matching books by their contents rather than their file name, and sending each book's title. If the reader already syncs its place with another server, such as CrossPoint Sync, the card leaves those settings alone and asks first.
 
 What it sends
 
