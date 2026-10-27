@@ -12,6 +12,8 @@ CrossPoint.registerPlugin((container, api) => {
   const KOREADER_ACCEPT = "application/vnd.koreader.v1+json";
   const JSON_TYPE = "application/json";
   const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+  const MODEL_PREFIX = /^xteink[_-]?/i;
+  const MODEL_SEPARATOR = /[_-]+/;
   const HOTSPOT_MODE = "AP";
   const MILLISECONDS_PER_SECOND = 1000;
   const SLOW_DOWN_SECONDS = 5;
@@ -304,7 +306,13 @@ CrossPoint.registerPlugin((container, api) => {
   }
 
   function deviceName() {
-    return status.device ? `Xteink ${status.device}` : "Xteink";
+    const model = String(status.device || "")
+      .replace(MODEL_PREFIX, "")
+      .split(MODEL_SEPARATOR)
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+    return model ? `Xteink ${model}` : "Xteink";
   }
 
   async function finishConnecting(server, key) {
