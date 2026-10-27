@@ -61,6 +61,17 @@ test("the shipped manifests name the plugin and carry no events until it is conn
   assert.ok(Buffer.byteLength(fs.readFileSync(path.join(PLUGIN_DIR, "README.md"))) < 16 * 1024);
 });
 
+test("the device is named from the model the firmware reports", async () => {
+  const names = {};
+  for (const device of ["xteink_x4_pro", "xteink_x3", "X4", ""]) {
+    const page = await mount({ status: { device }, relay: pairingRelay({ pollAnswers: [PENDING] }) });
+    await page.click("Connect to Seekquel");
+    names[device] = page.relays.find((call) => call.url.endsWith("/pair/start")).body.device_name;
+  }
+
+  assert.deepEqual(names, { xteink_x4_pro: "Xteink X4 Pro", xteink_x3: "Xteink X3", X4: "Xteink X4", "": "Xteink" });
+});
+
 test("connecting pairs by code, writes the events manifest and fixes the reader's sync settings", async () => {
   const page = await mount({ relay: pairingRelay({ pollAnswers: [PENDING, APPROVED] }) });
 

@@ -1,8 +1,8 @@
 # Contributing
 
 Reports from real readers are the most valuable thing anyone can send right now. The plugin
-has been run against CrossPoint's own settings page and a simulated reader, but not yet on
-an Xteink in somebody's hands.
+was first run against CrossPoint's own settings page and a simulated reader, and has since
+run on a few readers' X4 Pros, but it is new and every report helps.
 
 ## Reporting a bug
 
