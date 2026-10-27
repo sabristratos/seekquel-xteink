@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.2
+
+- A paired reader is named from its model, for example Xteink X4 Pro, instead of its raw model id.
+
 ## 1.0.1
 
 - A reader that syncs its place with another server, such as CrossPoint Sync, keeps it, including when the plugin is first connected: connecting changes none of its sync settings. The card says where the place syncs, still sends reading time to Seekquel, and offers to match books by their contents, which that server uses too.
