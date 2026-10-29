@@ -12,6 +12,7 @@ CrossPoint.registerPlugin((container, api) => {
   const KOREADER_ACCEPT = "application/vnd.koreader.v1+json";
   const JSON_TYPE = "application/json";
   const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+  const HTTPS_URL = /^https:\/\/\S+$/i;
   const MODEL_PREFIX = /^xteink[_-]?/i;
   const MODEL_SEPARATOR = /[_-]+/;
   const HOTSPOT_MODE = "AP";
@@ -179,6 +180,10 @@ CrossPoint.registerPlugin((container, api) => {
     return normalizedAddress(address) === SERVER_ADDRESS;
   }
 
+  function secureServer(value) {
+    return typeof value === "string" && HTTPS_URL.test(value) ? value : SERVER;
+  }
+
   function parseBody(response) {
     try {
       return JSON.parse(response.body || "null");
@@ -325,6 +330,9 @@ CrossPoint.registerPlugin((container, api) => {
       await writeJson(DEVICE_FILE, eventsManifest(true));
       await writeJson(CONFIG_FILE, config);
     } catch (_error) {
+      config = {};
+      await writeJson(DEVICE_FILE, idleManifest()).catch(() => {});
+      await writeJson(CONFIG_FILE, {}).catch(() => {});
       showDisconnected(TEXT.saveFailed);
       return;
     }
@@ -392,9 +400,9 @@ CrossPoint.registerPlugin((container, api) => {
       return;
     }
     if (pairing !== current) return;
-    if (polled.status === HTTP_OK && polled.json && polled.json.key) {
+    if (polled.status === HTTP_OK && polled.json && typeof polled.json.key === "string" && polled.json.key !== "") {
       stopPairing();
-      await finishConnecting(polled.json.sync_url || SERVER, polled.json.key);
+      await finishConnecting(secureServer(polled.json.sync_url), polled.json.key);
       return;
     }
     const type = polled.json && polled.json.error ? polled.json.error.type : null;

@@ -321,3 +321,40 @@ test("opening the card for a removed device says so without a tap, and a working
   const working = await mount({ ...connected, relay: async () => ({ status: 200, body: "{}" }) });
   assert.doesNotMatch(working.text(), /Seekquel answered|no longer accepts/);
 });
+
+test("a sync address that is not https is ignored and the reader is paired to Seekquel's own", async () => {
+  const insecure = { status: 200, body: JSON.stringify({ key: KEY, sync_url: "http://collector.example/koreader", device_id: "01J" }) };
+  const page = await mount({ relay: pairingRelay({ pollAnswers: [insecure] }) });
+
+  await page.click("Connect to Seekquel");
+  await page.runTimers();
+
+  assert.equal(page.fileJson("config.json").server, SERVER);
+  assert.equal(page.deviceSettings.koServerUrl, SERVER);
+});
+
+test("a key that is not a string is not stored", async () => {
+  const odd = { status: 200, body: JSON.stringify({ key: { a: 1 }, sync_url: SERVER }) };
+  const page = await mount({ relay: pairingRelay({ pollAnswers: [odd] }) });
+
+  await page.click("Connect to Seekquel");
+  await page.runNextTimer();
+
+  assert.equal(page.files.has("config.json"), false);
+  assert.doesNotMatch(page.text(), /Connected to Seekquel/);
+});
+
+test("a failed save while connecting leaves no events behind", async () => {
+  let configWrites = 0;
+  const page = await mount({
+    relay: pairingRelay({ pollAnswers: [APPROVED] }),
+    failWrite: (name) => name === "config.json" && (configWrites += 1) === 1,
+  });
+
+  await page.click("Connect to Seekquel");
+  await page.runTimers();
+
+  assert.match(page.text(), /could not save to its memory card/);
+  assert.equal(page.fileJson("device.json").events, undefined);
+  assert.deepEqual(page.fileJson("config.json"), {});
+});

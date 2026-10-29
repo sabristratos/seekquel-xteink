@@ -68,7 +68,7 @@ export async function settle() {
   }
 }
 
-export async function mount({ settings = defaultSettings(), config = null, status = {}, relay } = {}) {
+export async function mount({ settings = defaultSettings(), config = null, status = {}, relay, failWrite = () => false } = {}) {
   const files = new Map();
   files.set("manifest.json", fs.readFileSync(path.join(PLUGIN_DIR, "manifest.json"), "utf8"));
   if (config !== null) files.set("config.json", JSON.stringify(config));
@@ -103,6 +103,7 @@ export async function mount({ settings = defaultSettings(), config = null, statu
     pluginFile: (file) => `/plugin?name=seekquel&file=${encodeURIComponent(file)}`,
     writeFile: async (target, base64) => {
       if (!target.startsWith(`${INSTALL_DIR}/`)) throw new Error(`write outside the plugin folder: ${target}`);
+      if (failWrite(target.slice(INSTALL_DIR.length + 1))) throw new Error(`write failed: ${target}`);
       files.set(target.slice(INSTALL_DIR.length + 1), Buffer.from(base64, "base64").toString("utf8"));
       return { ok: true };
     },
@@ -153,6 +154,10 @@ export async function mount({ settings = defaultSettings(), config = null, statu
     },
     async click(label) {
       await this.button(label).listeners.click();
+      await settle();
+    },
+    async runNextTimer() {
+      await timers.shift()();
       await settle();
     },
     async runTimers() {

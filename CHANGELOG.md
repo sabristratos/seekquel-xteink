@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Connecting only accepts a secure sync address from Seekquel and a key that is text, and a save that fails part way no longer leaves the reader set to send reading time with no connection saved.
+
 ## 1.0.2
 
 - A paired reader is named from its model, for example Xteink X4 Pro, instead of its raw model id.
