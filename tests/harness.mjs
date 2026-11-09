@@ -68,10 +68,11 @@ export async function settle() {
   }
 }
 
-export async function mount({ settings = defaultSettings(), config = null, status = {}, relay, onWrite = () => {} } = {}) {
+export async function mount({ settings = defaultSettings(), config = null, deviceFile = null, status = {}, relay, onWrite = () => {} } = {}) {
   const files = new Map();
   files.set("manifest.json", fs.readFileSync(path.join(PLUGIN_DIR, "manifest.json"), "utf8"));
   if (config !== null) files.set("config.json", JSON.stringify(config));
+  if (deviceFile !== null) files.set("device.json", deviceFile);
 
   const deviceSettings = { ...settings };
   const settingsPosts = [];

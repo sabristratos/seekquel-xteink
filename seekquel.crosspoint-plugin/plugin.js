@@ -346,13 +346,17 @@ CrossPoint.registerPlugin((container, api) => {
     if (!open) return false;
     const previous = await serialized(async () => {
       const current = features();
-      if (!config.key || (open.finished_status === current.finished_status && open.highlights === current.highlights)) {
-        return null;
+      if (!config.key) return null;
+      const featuresChanged = open.finished_status !== current.finished_status || open.highlights !== current.highlights;
+      const next = featuresChanged ? Object.assign({}, config, { features: open }) : config;
+      const wanted = eventsManifest(next.send_on_sleep !== false, open);
+      const stored = await readJson(api.pluginFile(DEVICE_FILE)).catch(() => null);
+      if (!featuresChanged && JSON.stringify(stored) === JSON.stringify(wanted)) return null;
+      await writeJson(DEVICE_FILE, wanted);
+      if (featuresChanged) {
+        await writeJson(CONFIG_FILE, next);
+        config = next;
       }
-      const next = Object.assign({}, config, { features: open });
-      await writeJson(DEVICE_FILE, eventsManifest(next.send_on_sleep !== false, open));
-      await writeJson(CONFIG_FILE, next);
-      config = next;
       return current;
     }).catch(() => null);
     if (!previous) return false;

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1
+
+- Fixes reading time not being sent after updating the plugin in place: opening the card now sets sending back up if the update left it off. If you updated to 1.2.0 and nothing arrived, open the card on the reader's Plugins page once, then leave File Transfer.
+
 ## 1.2.0
 
 - For accounts in Seekquel's beta: a book you read to the end on this reader is marked read in Seekquel when you leave it on its last page. Jumping to the end does not count.

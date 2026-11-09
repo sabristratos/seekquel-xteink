@@ -440,7 +440,7 @@ test("highlights sync left on for an account that does not take highlights is fl
   });
 
   assert.match(page.text(), /Highlights sync is on, and Seekquel does not take highlights for this account yet/);
-  assert.equal(page.files.has("device.json"), false);
+  assert.deepEqual(page.fileJson("config.json"), CONNECTED.config);
 });
 
 test("a server that cannot say which features are open changes nothing", async () => {
@@ -459,4 +459,28 @@ test("a removed key is never asked about features", async () => {
 
   assert.match(page.text(), /no longer accepts this reader's key/);
   assert.ok(!page.relays.some((call) => call.url.endsWith("/features")));
+});
+
+test("opening the card after the plugin was updated in place binds the events the update's idle manifest dropped", async () => {
+  const page = await mount({ ...CONNECTED, relay: featureRelay({ finished_status: false, highlights: false }) });
+
+  const events = page.fileJson("device.json").events;
+  assert.ok(events["reader.session"]);
+  assert.match(events["reader.session"].request.body, new RegExp(`"plugin_version":"${VERSION}"`));
+  assert.equal(page.files.has("config.json"), true);
+  assert.match(page.text(), /leave File Transfer/);
+});
+
+test("opening the card when the manifest already matches writes nothing", async () => {
+  const first = await mount({ ...CONNECTED, relay: featureRelay({ finished_status: false, highlights: false }) });
+  const writes = [];
+  const second = await mount({
+    ...CONNECTED,
+    relay: featureRelay({ finished_status: false, highlights: false }),
+    deviceFile: first.files.get("device.json"),
+    onWrite: (name) => writes.push(name),
+  });
+
+  assert.deepEqual(writes, []);
+  assert.doesNotMatch(second.text(), /leave File Transfer/);
 });
