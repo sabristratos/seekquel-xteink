@@ -4,7 +4,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-export const PLUGIN_DIR = path.join(ROOT, "seekquel");
+export const PLUGIN_DIR = path.join(ROOT, "seekquel.crosspoint-plugin");
 const SOURCE = fs.readFileSync(path.join(PLUGIN_DIR, "plugin.js"), "utf8");
 const INSTALL_DIR = "/.crosspoint/plugins/seekquel";
 
@@ -68,7 +68,7 @@ export async function settle() {
   }
 }
 
-export async function mount({ settings = defaultSettings(), config = null, status = {}, relay } = {}) {
+export async function mount({ settings = defaultSettings(), config = null, status = {}, relay, onWrite = () => {} } = {}) {
   const files = new Map();
   files.set("manifest.json", fs.readFileSync(path.join(PLUGIN_DIR, "manifest.json"), "utf8"));
   if (config !== null) files.set("config.json", JSON.stringify(config));
@@ -103,7 +103,9 @@ export async function mount({ settings = defaultSettings(), config = null, statu
     pluginFile: (file) => `/plugin?name=seekquel&file=${encodeURIComponent(file)}`,
     writeFile: async (target, base64) => {
       if (!target.startsWith(`${INSTALL_DIR}/`)) throw new Error(`write outside the plugin folder: ${target}`);
-      files.set(target.slice(INSTALL_DIR.length + 1), Buffer.from(base64, "base64").toString("utf8"));
+      const name = target.slice(INSTALL_DIR.length + 1);
+      files.set(name, Buffer.from(base64, "base64").toString("utf8"));
+      onWrite(name, container);
       return { ok: true };
     },
     relay: async (method, url, headers, body) => {

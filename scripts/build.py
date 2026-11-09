@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / "seekquel"
+PLUGIN = ROOT / "seekquel.crosspoint-plugin"
 PACKAGE_FILES = ("README.md", "device.json", "manifest.json", "plugin.js")
 FIXED_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 UNIX_SYSTEM = 3

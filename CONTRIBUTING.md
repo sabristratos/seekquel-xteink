@@ -20,13 +20,13 @@ Redact your device key if it appears anywhere. It looks like `ABCD-EFGH-IJKL-MNO
 ## Layout
 
 ```
-seekquel/              what goes on the memory card
-  manifest.json        the card's title and the version, the one place it is written
-  device.json          the shipped manifest, with no events until the reader connects
-  plugin.js            the card on the reader's web page
-  README.md            the text the reader shows under Settings, System, Plugins
-tests/                 the card run against a stand-in for the reader's web page
-scripts/build.py       writes dist/seekquel-crosspoint-<version>.zip
+seekquel.crosspoint-plugin/  what goes on the memory card
+  manifest.json              the card's title and the version, the one place it is written
+  device.json                the shipped manifest, with no events until the reader connects
+  plugin.js                  the card on the reader's web page
+  README.md                  the text the reader shows under Home, Plugins
+tests/                       the card run against a stand-in for the reader's web page
+scripts/build.py             writes dist/seekquel-crosspoint-<version>.zip
 ```
 
 ## Building and installing

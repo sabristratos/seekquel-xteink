@@ -4,11 +4,12 @@ Logs the time you spend reading on this reader, and how far each sitting takes y
 
 Setting it up
 
-1. Join a Wi-Fi network on this reader.
-2. Open this reader's web page on your phone or computer, the same page you use to send books to it.
-3. Open Settings on that page and find the Seekquel card.
-4. Choose Connect to Seekquel, then enter the code it shows in Seekquel.
-5. Leave File Transfer on the reader. Sending starts then.
+1. Check Plugins is on, under Settings, Connectivity on this reader.
+2. Join a Wi-Fi network on this reader.
+3. Open this reader's web page on your phone or computer, the same page you use to send books to it.
+4. Open Plugins on that page and find the Seekquel card.
+5. Choose Connect to Seekquel, then enter the code it shows in Seekquel.
+6. Leave File Transfer on the reader. Sending starts then.
 
 The card also sets this reader's sync settings for Seekquel: the sync server, matching books by their contents rather than their file name, and sending each book's title. If the reader already syncs its place with another server, such as CrossPoint Sync, the card leaves those settings alone and asks first.
 
@@ -16,7 +17,9 @@ What it sends
 
 After at least ten seconds of reading, the reader notes when you read, for how long, and how far through the book you got. When it goes to sleep it turns Wi-Fi on for a few seconds and sends that to Seekquel. With the battery under 20%, or no saved network, it waits and sends it next time.
 
-Your place in a book still moves when you choose Sync Progress, as before. Highlights and finished books are not sent yet.
+Your place in a book still moves when you choose Sync Progress, as before.
+
+If your Seekquel account is in the beta, the card says so and two more things happen. A book you read to the end here is marked read when you leave it on its last page. And when you choose Sync Progress in a book, your highlights go to its notebook in Seekquel.
 
 Stopping it
 

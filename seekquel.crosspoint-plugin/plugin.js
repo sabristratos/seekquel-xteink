@@ -33,7 +33,7 @@ CrossPoint.registerPlugin((container, api) => {
     ".seekquel-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}" +
     ".seekquel-code{font-size:1.6em;font-weight:600;letter-spacing:0.08em;margin:8px 0}" +
     ".seekquel-actions a{text-decoration:none;display:inline-flex;align-items:center;box-sizing:border-box}";
-  const IDLE_DESCRIPTION = "Logs your reading time in Seekquel. Connect it from this reader's web page, under Settings.";
+  const IDLE_DESCRIPTION = "Logs your reading time in Seekquel. Connect it from this reader's web page, under Plugins.";
   const ACTIVE_DESCRIPTION = "Sends your reading time to Seekquel.";
   const SETTING = {
     url: "koServerUrl",
@@ -44,6 +44,7 @@ CrossPoint.registerPlugin((container, api) => {
     metadata: "koSendMetadata",
     clippings: "koSyncClippings",
   };
+  const NO_FEATURES = { finished_status: false, highlights: false };
   const PAIRING_STOPPED = {
     access_denied: "denied",
     expired_token: "expired",
@@ -74,6 +75,8 @@ CrossPoint.registerPlugin((container, api) => {
     sendsOnSleep:
       "When you finish reading, your reader sends the time and how far you got as it goes to sleep. It turns Wi-Fi on for a few seconds to do it, and waits when the battery is under 20%.",
     sendsOnWifi: "Reading time is sent the next time this reader is on Wi-Fi.",
+    finishedOn: "When you leave a book on its last page after reading it here, Seekquel marks it read.",
+    highlightsOn: "When you choose Sync Progress in a book, your highlights go to its notebook in Seekquel.",
     sleepToggle: "Send when the reader goes to sleep",
     leaveTransfer: "Sending starts when you leave File Transfer on the reader.",
     check: "Check connection",
@@ -105,7 +108,8 @@ CrossPoint.registerPlugin((container, api) => {
     match: "Books are matched by file name, so the same book on two devices would count as two.",
     metadata: "Book titles are not sent, so Seekquel cannot tell which book a file is.",
     serverType: "The server type is not Other, so the exact spot in a book is not kept.",
-    clippings: "Clippings sync is on, and Seekquel does not take clippings yet, so every sync would report a failure.",
+    clippingsOn: "Highlights sync is on, and Seekquel does not take highlights for this account yet.",
+    clippingsOff: "Highlights sync is off, so your highlights stay on this reader.",
   };
 
   let version = null;
@@ -113,6 +117,7 @@ CrossPoint.registerPlugin((container, api) => {
   let settings = {};
   let status = {};
   let pairing = null;
+  let writing = Promise.resolve();
 
   function element(tag, text) {
     const node = document.createElement(tag);
@@ -187,6 +192,32 @@ CrossPoint.registerPlugin((container, api) => {
     }
   }
 
+  function features() {
+    return Object.assign({}, NO_FEATURES, config.features || {});
+  }
+
+  function serialized(task) {
+    const run = writing.then(task);
+    writing = run.catch(() => null);
+    return run;
+  }
+
+  function eventHeaders() {
+    return {
+      "Content-Type": JSON_TYPE,
+      Accept: KOREADER_ACCEPT,
+      "x-auth-user": "{cfg.key}",
+      "X-Book-Path": "{event.book}",
+    };
+  }
+
+  function exitBody() {
+    return (
+      '{"end_percent":"{event.end_percent}","event_id":"{event.id}","ts":{event.ts},' +
+      `"client":"${WIRE_CLIENT}","plugin_version":"${version}"}`
+    );
+  }
+
   function sessionBody() {
     return (
       '{"document":"{event.document}","start_time":{event.start_time},"end_time":{event.end_time},' +
@@ -196,28 +227,20 @@ CrossPoint.registerPlugin((container, api) => {
     );
   }
 
-  function eventsManifest(sendOnSleep) {
-    return {
-      title: TITLE,
-      description: ACTIVE_DESCRIPTION,
-      config: { file: CONFIG_FILE },
-      events: {
-        "reader.session": {
-          request: {
-            method: "POST",
-            url: "{cfg.server}/reading-sessions",
-            headers: {
-              "Content-Type": JSON_TYPE,
-              Accept: KOREADER_ACCEPT,
-              "x-auth-user": "{cfg.key}",
-              "X-Book-Path": "{event.book}",
-            },
-            body: sessionBody(),
-          },
-          connect: sendOnSleep,
-        },
+  function eventsManifest(sendOnSleep, open) {
+    const events = {
+      "reader.session": {
+        request: { method: "POST", url: "{cfg.server}/reading-sessions", headers: eventHeaders(), body: sessionBody() },
+        connect: sendOnSleep,
       },
     };
+    if (open.finished_status) {
+      events["reader.exit"] = {
+        request: { method: "POST", url: "{cfg.server}/book-exits", headers: eventHeaders(), body: exitBody() },
+        connect: sendOnSleep,
+      };
+    }
+    return { title: TITLE, description: ACTIVE_DESCRIPTION, config: { file: CONFIG_FILE }, events };
   }
 
   function idleManifest() {
@@ -244,7 +267,7 @@ CrossPoint.registerPlugin((container, api) => {
       [SETTING.serverType]: SERVER_TYPE_OTHER,
       [SETTING.match]: MATCH_BINARY,
       [SETTING.metadata]: ON,
-      [SETTING.clippings]: OFF,
+      [SETTING.clippings]: features().highlights ? ON : OFF,
     };
   }
 
@@ -261,7 +284,9 @@ CrossPoint.registerPlugin((container, api) => {
     if (has(SETTING.match) && Number(settings[SETTING.match]) !== MATCH_BINARY) problems.push("match");
     if (has(SETTING.metadata) && Number(settings[SETTING.metadata]) !== ON) problems.push("metadata");
     if (has(SETTING.serverType) && Number(settings[SETTING.serverType]) !== SERVER_TYPE_OTHER) problems.push("serverType");
-    if (has(SETTING.clippings) && Number(settings[SETTING.clippings]) !== OFF) problems.push("clippings");
+    if (has(SETTING.clippings) && Number(settings[SETTING.clippings]) !== wantedSettings(config.key)[SETTING.clippings]) {
+      problems.push("clippings");
+    }
     return otherSyncServer() ? problems.filter((problem) => PROBLEMS_WHEN_ELSEWHERE.includes(problem)) : problems;
   }
 
@@ -300,6 +325,43 @@ CrossPoint.registerPlugin((container, api) => {
     return { status: Number(response.status), json: parseBody(response) };
   }
 
+  function problemText(problem) {
+    if (problem !== "clippings") return PROBLEMS[problem];
+    return features().highlights ? PROBLEMS.clippingsOff : PROBLEMS.clippingsOn;
+  }
+
+  async function fetchFeatures(server, key) {
+    try {
+      const response = await api.relay("GET", `${server}/features`, { "x-auth-user": key, Accept: JSON_TYPE }, "");
+      const body = Number(response.status) === HTTP_OK ? parseBody(response) : null;
+      if (!body || typeof body !== "object") return null;
+      return { finished_status: body.finished_status === true, highlights: body.highlights === true };
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  async function refreshFeatures() {
+    const open = await fetchFeatures(config.server, config.key);
+    if (!open) return false;
+    const previous = await serialized(async () => {
+      const current = features();
+      if (!config.key || (open.finished_status === current.finished_status && open.highlights === current.highlights)) {
+        return null;
+      }
+      const next = Object.assign({}, config, { features: open });
+      await writeJson(DEVICE_FILE, eventsManifest(next.send_on_sleep !== false, open));
+      await writeJson(CONFIG_FILE, next);
+      config = next;
+      return current;
+    }).catch(() => null);
+    if (!previous) return false;
+    if (previous.highlights !== open.highlights && !otherSyncServer()) {
+      await applySettings(config.key, ["clippings"]).catch(() => false);
+    }
+    return true;
+  }
+
   async function authenticates(server, key) {
     const response = await api.relay("GET", `${server}/users/auth`, { "x-auth-user": key, Accept: KOREADER_ACCEPT }, "");
     return Number(response.status);
@@ -316,13 +378,15 @@ CrossPoint.registerPlugin((container, api) => {
   }
 
   async function finishConnecting(server, key) {
+    const address = isSeekquel(server) ? SERVER : server;
     config = {
-      server: isSeekquel(server) ? SERVER : server,
+      server: address,
       key,
       send_on_sleep: true,
+      features: (await fetchFeatures(address, key)) || NO_FEATURES,
     };
     try {
-      await writeJson(DEVICE_FILE, eventsManifest(true));
+      await writeJson(DEVICE_FILE, eventsManifest(true, features()));
       await writeJson(CONFIG_FILE, config);
     } catch (_error) {
       showDisconnected(TEXT.saveFailed);
@@ -430,19 +494,29 @@ CrossPoint.registerPlugin((container, api) => {
       const answer = await authenticates(config.server, config.key);
       if (answer === HTTP_OK) {
         if (!quiet) output.textContent = TEXT.checkOk;
-        return;
+        return true;
       }
       output.textContent = answer === HTTP_UNAUTHORIZED ? TEXT.keyRevoked : TEXT.unexpected;
     } catch (_error) {
       if (!quiet) output.textContent = TEXT.unreachable;
     }
+    return false;
+  }
+
+  async function checkAndRefresh(output, quiet) {
+    if ((await checkConnection(output, quiet)) && (await refreshFeatures())) {
+      showConnected(quiet ? TEXT.leaveTransfer : `${TEXT.checkOk} ${TEXT.leaveTransfer}`);
+    }
   }
 
   async function setSendOnSleep(enabled, output) {
     try {
-      await writeJson(DEVICE_FILE, eventsManifest(enabled));
-      config = Object.assign({}, config, { send_on_sleep: enabled });
-      await writeJson(CONFIG_FILE, config);
+      await serialized(async () => {
+        const next = Object.assign({}, config, { send_on_sleep: enabled });
+        await writeJson(DEVICE_FILE, eventsManifest(enabled, features()));
+        await writeJson(CONFIG_FILE, next);
+        config = next;
+      });
       showConnected(TEXT.leaveTransfer);
     } catch (_error) {
       output.textContent = TEXT.saveFailed;
@@ -451,13 +525,15 @@ CrossPoint.registerPlugin((container, api) => {
 
   async function disconnect() {
     try {
-      await writeJson(DEVICE_FILE, idleManifest());
-      await writeJson(CONFIG_FILE, {});
+      await serialized(async () => {
+        await writeJson(DEVICE_FILE, idleManifest());
+        await writeJson(CONFIG_FILE, {});
+        config = {};
+      });
     } catch (_error) {
       showConnected(TEXT.saveFailed);
       return;
     }
-    config = {};
     showDisconnected(TEXT.disconnected);
   }
 
@@ -504,6 +580,8 @@ CrossPoint.registerPlugin((container, api) => {
     const output = message(notice || "");
     const nodes = [element("h3", TEXT.connected)];
     nodes.push(element("p", config.send_on_sleep === false ? TEXT.sendsOnWifi : TEXT.sendsOnSleep));
+    if (features().finished_status) nodes.push(element("p", TEXT.finishedOn));
+    if (features().highlights) nodes.push(element("p", TEXT.highlightsOn));
 
     const elsewhere = otherSyncServer();
     if (elsewhere) {
@@ -516,7 +594,7 @@ CrossPoint.registerPlugin((container, api) => {
     const problems = settingProblems();
     if (problems.length > 0) {
       const list = element("ul");
-      for (const problem of problems) list.appendChild(element("li", PROBLEMS[problem]));
+      for (const problem of problems) list.appendChild(element("li", problemText(problem)));
       nodes.push(
         element("h3", TEXT.fixHeading),
         list,
@@ -543,7 +621,7 @@ CrossPoint.registerPlugin((container, api) => {
 
     nodes.push(
       toggle,
-      actions(button(TEXT.check, () => checkConnection(output)), button(TEXT.disconnect, disconnect, DANGER)),
+      actions(button(TEXT.check, () => checkAndRefresh(output, false)), button(TEXT.disconnect, disconnect, DANGER)),
       output,
     );
     show(...nodes);
@@ -566,7 +644,7 @@ CrossPoint.registerPlugin((container, api) => {
       return;
     }
     if (typeof config.key === "string" && config.key !== "") {
-      await checkConnection(showConnected(), true);
+      await checkAndRefresh(showConnected(), true);
       return;
     }
     showDisconnected();

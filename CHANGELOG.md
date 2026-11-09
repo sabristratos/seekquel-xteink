@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+- For accounts in Seekquel's beta: a book you read to the end on this reader is marked read in Seekquel when you leave it on its last page. Jumping to the end does not count.
+- For accounts in Seekquel's beta: your highlights go to the book's notebook in Seekquel when you choose Sync Progress. The card turns the reader's highlights sync on for you.
+- The card asks Seekquel which of these your account has each time it opens, and sets the reader up to match.
+
+## 1.1.0
+
+- Follows CrossPoint 2.0.0, the first stable release with plugins: the Seekquel card is now on the reader's Plugins page, where 2.0.0 shows plugin cards.
+
 ## 1.0.2
 
 - A paired reader is named from its model, for example Xteink X4 Pro, instead of its raw model id.

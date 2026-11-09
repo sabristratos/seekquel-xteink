@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test tests/plugin.test.mjs",
-    "check": "node --check seekquel/plugin.js && node --test tests/plugin.test.mjs",
+    "check": "node --check seekquel.crosspoint-plugin/plugin.js && node --test tests/plugin.test.mjs",
     "build": "python scripts/build.py"
   }
 }

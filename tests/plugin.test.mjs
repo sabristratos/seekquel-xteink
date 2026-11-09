@@ -175,7 +175,7 @@ test("a reader that syncs its place with another server keeps it, and only the s
 
   assert.match(page.text(), /syncs with sync\.crosspointreader\.com, not Seekquel/);
   assert.match(page.text(), /matched by file name/);
-  assert.doesNotMatch(page.text(), /not Seekquel's|not this reader's Seekquel key|titles are not sent|server type|Clippings sync/);
+  assert.doesNotMatch(page.text(), /not Seekquel's|not this reader's Seekquel key|titles are not sent|server type|Highlights sync/);
 
   await page.click("Fix sync settings");
 
@@ -320,4 +320,143 @@ test("opening the card for a removed device says so without a tap, and a working
 
   const working = await mount({ ...connected, relay: async () => ({ status: 200, body: "{}" }) });
   assert.doesNotMatch(working.text(), /Seekquel answered|no longer accepts/);
+});
+
+const EXIT = { book: '/Books/Le "Grand" Meaulnes.epub', percent: "100", end_percent: "100", id: "a1b2c3-8", ts: "1757790000" };
+
+function featureRelay(open, { auth = 200 } = {}) {
+  return async (method, url) => {
+    if (url === `${SERVER}/features`) return { status: 200, body: JSON.stringify(open) };
+    if (url === `${SERVER}/users/auth`) return { status: auth, body: "{}" };
+    return pairingRelay({ pollAnswers: [APPROVED] })(method, url);
+  };
+}
+
+const CONNECTED = {
+  config: { server: SERVER, key: KEY, send_on_sleep: true },
+  settings: defaultSettings({ koServerUrl: SERVER, koUsername: KEY, koServerType: 2, koMatchMethod: 1, koSendMetadata: 1 }),
+};
+
+test("connecting while finished books and highlights are open subscribes to leaving a book and turns highlights sync on", async () => {
+  const page = await mount({ relay: featureRelay({ finished_status: true, highlights: true }) });
+
+  await page.click("Connect to Seekquel");
+  await page.runTimers();
+
+  const events = page.fileJson("device.json").events;
+  assert.deepEqual(Object.keys(events).sort(), ["reader.exit", "reader.session"]);
+  assert.equal(events["reader.exit"].connect, true);
+  assert.equal(render(events["reader.exit"].request.url, { cfg: page.fileJson("config.json"), event: {} }), `${SERVER}/book-exits`);
+  assert.equal(page.deviceSettings.koSyncClippings, 1);
+  assert.match(page.text(), /marks it read/);
+  assert.match(page.text(), /highlights go to its notebook/);
+  assert.doesNotMatch(page.text(), /Highlights sync is/);
+});
+
+test("the exit template renders to the body the server reads, and an unknown value still parses", async () => {
+  const page = await mount({ relay: featureRelay({ finished_status: true, highlights: false }) });
+  await page.click("Connect to Seekquel");
+  await page.runTimers();
+
+  const request = page.fileJson("device.json").events["reader.exit"].request;
+  const body = JSON.parse(render(request.body, { cfg: page.fileJson("config.json"), event: EXIT }));
+
+  assert.deepEqual(body, { end_percent: "100", event_id: EXIT.id, ts: 1757790000, client: "crosspoint-reader", plugin_version: VERSION });
+  assert.equal(render(request.headers["X-Book-Path"], { cfg: {}, event: EXIT }), EXIT.book);
+  assert.equal(JSON.parse(render(request.body, { cfg: {}, event: { ts: "0" } })).end_percent, "{event.end_percent}");
+});
+
+test("a reader outside both betas gets reading time only and keeps highlights sync off", async () => {
+  const page = await mount({ relay: featureRelay({ finished_status: false, highlights: false }) });
+
+  await page.click("Connect to Seekquel");
+  await page.runTimers();
+
+  assert.deepEqual(Object.keys(page.fileJson("device.json").events), ["reader.session"]);
+  assert.equal(page.deviceSettings.koSyncClippings, 0);
+  assert.doesNotMatch(page.text(), /marks it read|notebook/);
+});
+
+test("opening the card after a beta opens rewrites the manifest and turns highlights sync on", async () => {
+  const page = await mount({ ...CONNECTED, relay: featureRelay({ finished_status: true, highlights: true }) });
+
+  assert.ok(page.fileJson("device.json").events["reader.exit"]);
+  assert.deepEqual(page.fileJson("config.json").features, { finished_status: true, highlights: true });
+  assert.deepEqual(page.settingsPosts, [{ koSyncClippings: 1 }]);
+  assert.equal(page.deviceSettings.koSyncClippings, 1);
+  assert.match(page.text(), /leave File Transfer/);
+  assert.match(page.text(), /highlights go to its notebook/);
+  assert.doesNotMatch(page.text(), /Highlights sync is|need changing/);
+});
+
+test("a beta opening leaves the sync settings of a reader that syncs its place elsewhere alone", async () => {
+  const page = await mount({
+    config: CONNECTED.config,
+    settings: defaultSettings({ koServerUrl: "https://sync.crosspointreader.com", koUsername: "reader", koMatchMethod: 1 }),
+    relay: featureRelay({ finished_status: false, highlights: true }),
+  });
+
+  assert.deepEqual(page.fileJson("config.json").features, { finished_status: false, highlights: true });
+  assert.deepEqual(page.settingsPosts, []);
+  assert.equal(page.deviceSettings.koSyncClippings, 0);
+});
+
+test("turning off sending at sleep while the card is updating its features keeps both", async () => {
+  let toggled = false;
+  const page = await mount({
+    ...CONNECTED,
+    relay: featureRelay({ finished_status: true, highlights: false }),
+    onWrite: (name, container) => {
+      if (name !== "device.json" || toggled) return;
+      toggled = true;
+      const stack = [container];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (node.name === "send_on_sleep") {
+          node.checked = false;
+          node.listeners.change();
+          return;
+        }
+        stack.push(...node.children);
+      }
+    },
+  });
+
+  assert.ok(toggled);
+  const device = page.fileJson("device.json");
+  const config = page.fileJson("config.json");
+  assert.equal(config.send_on_sleep, false);
+  assert.deepEqual(config.features, { finished_status: true, highlights: false });
+  assert.equal(device.events["reader.session"].connect, false);
+  assert.equal(device.events["reader.exit"].connect, false);
+  assert.match(page.text(), /next time this reader is on Wi-Fi/);
+});
+
+test("highlights sync left on for an account that does not take highlights is flagged", async () => {
+  const page = await mount({
+    ...CONNECTED,
+    settings: defaultSettings({ koServerUrl: SERVER, koUsername: KEY, koServerType: 2, koMatchMethod: 1, koSendMetadata: 1, koSyncClippings: 1 }),
+    relay: featureRelay({ finished_status: false, highlights: false }),
+  });
+
+  assert.match(page.text(), /Highlights sync is on, and Seekquel does not take highlights for this account yet/);
+  assert.equal(page.files.has("device.json"), false);
+});
+
+test("a server that cannot say which features are open changes nothing", async () => {
+  const page = await mount({
+    config: { ...CONNECTED.config, features: { finished_status: true, highlights: false } },
+    settings: CONNECTED.settings,
+    relay: async (method, url) => (url.endsWith("/features") ? { status: 404, body: "{}" } : { status: 200, body: "{}" }),
+  });
+
+  assert.equal(page.files.has("device.json"), false);
+  assert.match(page.text(), /marks it read/);
+});
+
+test("a removed key is never asked about features", async () => {
+  const page = await mount({ ...CONNECTED, relay: featureRelay({ finished_status: true, highlights: true }, { auth: 401 }) });
+
+  assert.match(page.text(), /no longer accepts this reader's key/);
+  assert.ok(!page.relays.some((call) => call.url.endsWith("/features")));
 });
